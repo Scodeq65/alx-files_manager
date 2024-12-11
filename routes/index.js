@@ -1,10 +1,10 @@
-// routes/index.js
-const express = require('express');
-const router = express.Router();
-const AppController = require('../controllers/AppController');
+import { Router } from 'express';
+import AppController from '../controllers/AppController';
 
-// Define the routes for /status and /stats
+const router = Router();
+
+// Define routes
 router.get('/status', AppController.getStatus);
 router.get('/stats', AppController.getStats);
 
-module.exports = router;
+export default router;
