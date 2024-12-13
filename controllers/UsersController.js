@@ -1,40 +1,71 @@
 import sha1 from 'sha1';
 import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
 class UsersController {
+  /**
+   * POST /users
+   * Creates a new user in the database.
+   */
   static async postNew(req, res) {
     const { email, password } = req.body;
 
-    // Validate email
     if (!email) {
       return res.status(400).json({ error: 'Missing email' });
     }
 
-    // Validate password
     if (!password) {
       return res.status(400).json({ error: 'Missing password' });
     }
 
     try {
-      // Check if the email already exists in the database
-      const existingUser = await dbClient.db.collection('users').findOne({ email });
+      const usersCollection = dbClient.db.collection('users');
+      const existingUser = await usersCollection.findOne({ email });
       if (existingUser) {
         return res.status(400).json({ error: 'Already exist' });
       }
 
-      // Hash the password using SHA1
       const hashedPassword = sha1(password);
 
-      // Insert the new user into the database
-      const result = await dbClient.db.collection('users').insertOne({
+      const result = await usersCollection.insertOne({
         email,
         password: hashedPassword,
       });
 
-      // Respond with the user's id and email
-      return res.status(201).json({ id: result.insertedId, email });
+      return res.status(201).json({
+        id: result.insertedId,
+        email,
+      });
     } catch {
-      // Return a generic error message if something goes wrong
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  /**
+   * GET /users/me
+   * Retrieves the authenticated user's details.
+   */
+  static async getMe(req, res) {
+    const token = req.headers['x-token'];
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const redisKey = `auth_${token}`;
+
+    try {
+      const userId = await redisClient.get(redisKey);
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const user = await dbClient.db.collection('users').findOne({ _id: dbClient.client.ObjectId(userId) });
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      return res.status(200).json({ id: user._id, email: user.email });
+    } catch {
       return res.status(500).json({ error: 'Internal Server Error' });
     }
   }
